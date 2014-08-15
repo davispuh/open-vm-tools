@@ -279,8 +279,7 @@ vmxnet_change_mtu(struct net_device *dev, int new_mtu)
 
 #endif
 
-
-#ifdef SET_ETHTOOL_OPS
+#ifdef VMW_HAVE_ETHTOOL_OPS
 /*
  *----------------------------------------------------------------------------
  *
@@ -526,7 +525,7 @@ vmxnet_ethtool_ops = {
 };
 
 
-#else   /* !defined(SET_ETHTOOL_OPS) */
+#else   /* !defined(VMW_HAVE_ETHTOOL_OPS) */
 
 
 /*
@@ -739,7 +738,7 @@ vmxnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
    }
    return -EOPNOTSUPP;
 }
-#endif /* SET_ETHTOOL_OPS */
+#endif /* !defined(VMW_HAVE_ETHTOOL_OPS) */
 
 
 /*
@@ -1142,8 +1141,12 @@ vmxnet_probe_device(struct pci_dev             *pdev, // IN: vmxnet PCI device
    dev->watchdog_timeo = VMXNET_WATCHDOG_TIMEOUT;
 #endif
 
-#ifdef SET_ETHTOOL_OPS
+#ifdef VMW_HAVE_ETHTOOL_OPS
+#  ifdef SET_ETHTOOL_OPS
    SET_ETHTOOL_OPS(dev, &vmxnet_ethtool_ops);
+#  else
+   dev->ethtool_ops = &vmxnet_ethtool_ops;
+#  endif
 #else
    dev->do_ioctl = vmxnet_ioctl;
 #endif

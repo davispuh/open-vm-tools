@@ -337,4 +337,8 @@ typedef netdev_features_t compat_netdev_features_t;
 typedef u32 compat_netdev_features_t;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0) || defined(SET_ETHTOOL_OPS)
+#define VMW_HAVE_ETHTOOL_OPS 1
+#endif
+
 #endif /* __COMPAT_NETDEVICE_H__ */
