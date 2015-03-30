@@ -32,6 +32,7 @@
 #include "compat_fs.h"
 #include "compat_kernel.h"
 #include "compat_slab.h"
+#include "compat_dentry.h"
 
 /* Must be after compat_fs.h */
 #if defined VMW_USE_AIO
@@ -384,7 +385,7 @@ HgfsPackOpenRequest(struct inode *inode, // IN: Inode of the file to open
    /* Build full name to send to server. */
    if (HgfsBuildPath(name,
                      req->bufferSize - (requestSize - 1),
-                     file->f_dentry) < 0) {
+                     DENTRY(file)) < 0) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackOpenRequest: build path "
               "failed\n"));
       return -EINVAL;
@@ -523,8 +524,8 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
    ASSERT(inode);
    ASSERT(inode->i_sb);
    ASSERT(file);
-   ASSERT(file->f_dentry);
-   ASSERT(file->f_dentry->d_inode);
+   ASSERT(DENTRY(file));
+   ASSERT(DENTRY(file)->d_inode);
 
    iinfo = INODE_GET_II_P(inode);
 
@@ -605,7 +606,7 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
              * This is not the root of our file system so there should always
              * be a parent.
              */
-            ASSERT(file->f_dentry->d_parent);
+            ASSERT(DENTRY(file)->d_parent);
 
             /*
              * Here we obtain a reference on the parent to make sure it doesn't
@@ -620,10 +621,10 @@ HgfsOpen(struct inode *inode,  // IN: Inode of the file to open
              * We could do this if we were willing to give up support for
              * O_EXCL on 2.4 kernels.
              */
-            dparent = dget(file->f_dentry->d_parent);
+            dparent = dget(DENTRY(file)->d_parent);
             iparent = dparent->d_inode;
 
-            HgfsSetUidGid(iparent, file->f_dentry,
+            HgfsSetUidGid(iparent, DENTRY(file),
                           current_fsuid(), current_fsgid());
 
             dput(dparent);
@@ -683,7 +684,7 @@ out:
     * forcing a revalidate on one will not force it on any others.
     */
    if (result != 0 && iinfo->createdAndUnopened == TRUE) {
-      HgfsDentryAgeForce(file->f_dentry);
+      HgfsDentryAgeForce(DENTRY(file));
    }
    return result;
 }
@@ -772,13 +773,13 @@ HgfsFileRead(struct kiocb *iocb,      // IN:  I/O control block
 
    ASSERT(iocb);
    ASSERT(iocb->ki_filp);
-   ASSERT(iocb->ki_filp->f_dentry);
+   ASSERT(DENTRY(iocb->ki_filp));
    ASSERT(iov);
 
    pos = HGFS_IOCB_TO_POS(iocb, offset);
    iovSegs = HGFS_IOV_TO_SEGS(iov, numSegs);
 
-   readDentry = iocb->ki_filp->f_dentry;
+   readDentry = DENTRY(iocb->ki_filp);
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
            __func__, readDentry->d_parent->d_name.name,
@@ -882,13 +883,13 @@ HgfsFileWrite(struct kiocb *iocb,      // IN:  I/O control block
 
    ASSERT(iocb);
    ASSERT(iocb->ki_filp);
-   ASSERT(iocb->ki_filp->f_dentry);
+   ASSERT(DENTRY(iocb->ki_filp));
    ASSERT(iov);
 
    pos = HGFS_IOCB_TO_POS(iocb, offset);
    iovSegs = HGFS_IOV_TO_SEGS(iov, numSegs);
 
-   writeDentry = iocb->ki_filp->f_dentry;
+   writeDentry = DENTRY(iocb->ki_filp);
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
           __func__, writeDentry->d_parent->d_name.name,
@@ -951,7 +952,7 @@ HgfsRead(struct file *file,  // IN:  File to read from
    int result;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
+   ASSERT(DENTRY(file));
    ASSERT(buf);
    ASSERT(offset);
 
@@ -959,7 +960,7 @@ HgfsRead(struct file *file,  // IN:  File to read from
            __func__, file->f_dentry->d_parent->d_name.name,
            file->f_dentry->d_name.name, count, (long long) *offset));
 
-   result = HgfsRevalidate(file->f_dentry);
+   result = HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsRead: invalid dentry\n"));
       goto out;
@@ -1002,8 +1003,8 @@ HgfsWrite(struct file *file,      // IN: File to write to
    int result;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
-   ASSERT(file->f_dentry->d_inode);
+   ASSERT(DENTRY(file));
+   ASSERT(DENTRY(file)->d_inode);
    ASSERT(buf);
    ASSERT(offset);
 
@@ -1011,7 +1012,7 @@ HgfsWrite(struct file *file,      // IN: File to write to
            __func__, file->f_dentry->d_parent->d_name.name,
            file->f_dentry->d_name.name, count, (long long) *offset));
 
-   result = HgfsRevalidate(file->f_dentry);
+   result = HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsWrite: invalid dentry\n"));
       goto out;
@@ -1051,7 +1052,7 @@ HgfsSeek(struct file *file,  // IN:  File to seek
    loff_t result = -1;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
+   ASSERT(DENTRY(file));
 
    LOG(6, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %u, %lld, %d)\n",
            __func__,
@@ -1059,7 +1060,7 @@ HgfsSeek(struct file *file,  // IN:  File to seek
             file->f_dentry->d_name.name,
             FILE_GET_FI_P(file)->handle, offset, origin));
 
-   result = (loff_t) HgfsRevalidate(file->f_dentry);
+   result = (loff_t) HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(6, (KERN_DEBUG "VMware hgfs: %s: invalid dentry\n", __func__));
       goto out;
@@ -1143,8 +1144,8 @@ HgfsFlush(struct file *file                        // IN: file to flush
    int ret = 0;
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
-            __func__, file->f_dentry->d_parent->d_name.name,
-            file->f_dentry->d_name.name));
+            __func__, DENTRY(file)->d_parent->d_name.name,
+            DENTRY(file)->d_name.name));
 
    if ((file->f_mode & FMODE_WRITE) == 0) {
       goto exit;
@@ -1157,7 +1158,7 @@ HgfsFlush(struct file *file                        // IN: file to flush
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
    ret = vfs_fsync(file, 0);
 #else
-   ret = HgfsDoFsync(file->f_dentry->d_inode);
+   ret = HgfsDoFsync(DENTRY(file)->d_inode);
 #endif
 
 exit:
@@ -1215,13 +1216,13 @@ HgfsFsync(struct file *file,            // IN: File we operate on
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %lld, %lld, %d)\n",
            __func__,
-           file->f_dentry->d_parent->d_name.name,
-           file->f_dentry->d_name.name,
+           DENTRY(file)->d_parent->d_name.name,
+           DENTRY(file)->d_name.name,
            startRange, endRange,
            datasync));
 
    /* Flush writes to the server and return any errors */
-   inode = file->f_dentry->d_inode;
+   inode = DENTRY(file)->d_inode;
 #if defined VMW_FSYNC_31
    ret = filemap_write_and_wait_range(inode->i_mapping, startRange, endRange);
 #else
@@ -1261,14 +1262,14 @@ HgfsMmap(struct file *file,            // IN: File we operate on
 
    ASSERT(file);
    ASSERT(vma);
-   ASSERT(file->f_dentry);
+   ASSERT(DENTRY(file));
 
    LOG(6, (KERN_DEBUG "VMware hgfs: %s(%s/%s)\n",
            __func__,
            file->f_dentry->d_parent->d_name.name,
            file->f_dentry->d_name.name));
 
-   result = HgfsRevalidate(file->f_dentry);
+   result = HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: %s: invalid dentry\n", __func__));
       goto out;
@@ -1309,8 +1310,8 @@ HgfsRelease(struct inode *inode,  // IN: Inode that this file points to
 
    ASSERT(inode);
    ASSERT(file);
-   ASSERT(file->f_dentry);
-   ASSERT(file->f_dentry->d_sb);
+   ASSERT(DENTRY(file));
+   ASSERT(DENTRY(file)->d_sb);
 
    handle = FILE_GET_FI_P(file)->handle;
    LOG(6, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %u)\n",
@@ -1443,14 +1444,14 @@ HgfsSendfile(struct file *file,    // IN: File to read from
    ssize_t result;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
+   ASSERT(DENTRY(file));
    ASSERT(target);
    ASSERT(offset);
    ASSERT(actor);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsSendfile: was called\n"));
 
-   result = HgfsRevalidate(file->f_dentry);
+   result = HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsSendfile: invalid dentry\n"));
       goto out;
@@ -1497,7 +1498,7 @@ HgfsSpliceRead(struct file *file,            // IN: File to read from
    ssize_t result;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
+   ASSERT(DENTRY(file));
 
    LOG(6, (KERN_DEBUG "VMware hgfs: %s(%s/%s, %lu@%Lu)\n",
            __func__,
@@ -1505,7 +1506,7 @@ HgfsSpliceRead(struct file *file,            // IN: File to read from
            file->f_dentry->d_name.name,
            (unsigned long) len, (unsigned long long) *offset));
 
-   result = HgfsRevalidate(file->f_dentry);
+   result = HgfsRevalidate(DENTRY(file));
    if (result) {
       LOG(4, (KERN_DEBUG "VMware hgfs: %s: invalid dentry\n", __func__));
       goto out;

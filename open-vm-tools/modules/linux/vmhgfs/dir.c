@@ -31,6 +31,7 @@
 #include "compat_kernel.h"
 #include "compat_slab.h"
 #include "compat_mutex.h"
+#include "compat_dentry.h"
 
 #include "cpName.h"
 #include "hgfsEscape.h"
@@ -414,7 +415,7 @@ HgfsPackDirOpenRequest(struct file *file,   // IN: File pointer for this open
 
    /* Build full name to send to server. */
    if (HgfsBuildPath(name, req->bufferSize - (requestSize - 1),
-                     file->f_dentry) < 0) {
+                     DENTRY(file)) < 0) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsPackDirOpenRequest: build path failed\n"));
       return -EINVAL;
    }
@@ -560,8 +561,8 @@ HgfsPrivateDirRelease(struct file *file,   // IN: File for the dir getting relea
    int result = 0;
 
    ASSERT(file);
-   ASSERT(file->f_dentry);
-   ASSERT(file->f_dentry->d_sb);
+   ASSERT(DENTRY(file));
+   ASSERT(DENTRY(file)->d_sb);
 
    LOG(6, (KERN_DEBUG "VMware hgfs: HgfsPrivateDirRelease: close fh %u\n", handle));
 
@@ -704,7 +705,7 @@ HgfsDirLlseek(struct file *file,
               loff_t offset,
               int origin)
 {
-   struct dentry *dentry = file->f_dentry;
+   struct dentry *dentry = DENTRY(file);
    struct inode *inode = dentry->d_inode;
    compat_mutex_t *mtx;
 
@@ -853,7 +854,7 @@ HgfsReaddirRefreshEntries(struct file *file)    // IN: File pointer for this ope
    }
 
    LOG(6, (KERN_DEBUG "VMware hgfs: %s: error: stale handle (%s) return %d)\n",
-            __func__, file->f_dentry->d_name.name, result));
+            __func__, DENTRY(file)->d_name.name, result));
    return result;
 }
 
@@ -988,9 +989,9 @@ HgfsReaddirNextEntry(struct file *file,              // IN: file
    char *fileName = NULL;
    int result;
 
-   ASSERT(file->f_dentry->d_inode->i_sb);
+   ASSERT(DENTRY(file)->d_inode->i_sb);
 
-   si = HGFS_SB_TO_COMMON(file->f_dentry->d_inode->i_sb);
+   si = HGFS_SB_TO_COMMON(DENTRY(file)->d_inode->i_sb);
    *entryIgnore = FALSE;
 
    /*
@@ -1079,18 +1080,18 @@ HgfsReaddirNextEntry(struct file *file,              // IN: file
     */
    if (!strncmp(entryName, ".", sizeof ".")) {
       if (!dotAndDotDotIgnore) {
-         *entryIno = file->f_dentry->d_inode->i_ino;
+         *entryIno = DENTRY(file)->d_inode->i_ino;
       } else {
          *entryIgnore = TRUE;
       }
    } else if (!strncmp(entryName, "..", sizeof "..")) {
       if (!dotAndDotDotIgnore) {
-         *entryIno = compat_parent_ino(file->f_dentry);
+         *entryIno = compat_parent_ino(DENTRY(file));
       } else {
          *entryIgnore = TRUE;
       }
    } else {
-     *entryIno = HgfsGetFileInode(&entryAttrs, file->f_dentry->d_inode->i_sb);
+     *entryIno = HgfsGetFileInode(&entryAttrs, DENTRY(file)->d_inode->i_sb);
    }
 
    if (*entryIgnore) {
@@ -1170,16 +1171,16 @@ HgfsDoReaddir(struct file *file,         // IN:
    ASSERT(filldirCtx);
 
    if (!file ||
-      !(file->f_dentry) ||
-      !(file->f_dentry->d_inode)) {
+      !(DENTRY(file)) ||
+      !(DENTRY(file)->d_inode)) {
       LOG(4, (KERN_DEBUG "VMware hgfs: HgfsReaddir: null input\n"));
       return -EFAULT;
    }
 
    LOG(4, (KERN_DEBUG "VMware hgfs: %s(%s, inum %lu, pos %Lu)\n",
           __func__,
-          file->f_dentry->d_name.name,
-          file->f_dentry->d_inode->i_ino,
+          DENTRY(file)->d_name.name,
+          DENTRY(file)->d_inode->i_ino,
           *currentPos));
 
    /*
@@ -1294,7 +1295,7 @@ HgfsReaddir(struct file *file,         // IN:
    /* If either dot and dotdot are filled in for us we can exit. */
    if (!dir_emit_dots(file, ctx)) {
       LOG(6, (KERN_DEBUG "VMware hgfs: %s: dir_emit_dots(%s, @ %Lu)\n",
-              __func__, file->f_dentry->d_name.name, ctx->pos));
+              __func__, DENTRY(file)->d_name.name, ctx->pos));
       return 0;
    }
 
@@ -1464,8 +1465,8 @@ HgfsDirRelease(struct inode *inode,  // IN: Inode that the file* points to
 
    ASSERT(inode);
    ASSERT(file);
-   ASSERT(file->f_dentry);
-   ASSERT(file->f_dentry->d_sb);
+   ASSERT(DENTRY(file));
+   ASSERT(DENTRY(file)->d_sb);
 
    handle = FILE_GET_FI_P(file)->handle;
 

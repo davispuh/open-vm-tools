@@ -36,6 +36,7 @@
 #include "compat_sched.h"
 #include "compat_slab.h"
 #include "compat_spinlock.h"
+#include "compat_dentry.h"
 
 #include "vm_assert.h"
 #include "cpName.h"
@@ -1924,7 +1925,7 @@ HgfsCreateFileInfo(struct file *file,  // IN: File pointer to attach to
 
    ASSERT(file);
 
-   inodeInfo = INODE_GET_II_P(file->f_dentry->d_inode);
+   inodeInfo = INODE_GET_II_P(DENTRY(file)->d_inode);
    ASSERT(inodeInfo);
 
    /* Get the mode of the opened file. */
